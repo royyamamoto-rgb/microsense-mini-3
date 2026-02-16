@@ -1,4 +1,4 @@
-const CACHE_NAME = 'microsense-v3';
+const CACHE_NAME = 'microsense-v4';
 const ASSETS = [
   '/', '/index.html', '/manifest.json',
   '/js/app.js', '/js/alpha-eye.js', '/js/charts.js',

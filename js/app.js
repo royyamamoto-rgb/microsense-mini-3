@@ -404,15 +404,26 @@ async function completeScan() {
     // Start background monitoring
     startMonitoring();
 
+    // Auto-activate mic so user can immediately talk
+    setTimeout(() => autoStartMic(), 3000);
+
   } catch (err) {
     console.error('Analysis error:', err);
     avatarEngine.setState('idle');
     appendChatBubble('assistant', "I had trouble reading you this time. Let's just chat instead!");
     document.getElementById('btnRescan').classList.add('visible');
+    setTimeout(() => autoStartMic(), 2000);
   }
 
   stopCamera();
   stopMicrophone();
+}
+
+function autoStartMic() {
+  if (isListening) return;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  toggleSpeechRecognition();
 }
 
 // ============================================
