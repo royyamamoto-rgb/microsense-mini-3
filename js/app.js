@@ -540,22 +540,97 @@ async function sendMessage() {
     return;
   }
 
-  // Check Ollama
-  if (!ollamaClient.connected) {
-    const ok = await ollamaClient.testConnection();
-    if (!ok) {
-      appendChatBubble('assistant', 'I cannot connect to Ollama. Please check that Ollama is running on ' + settings.ollamaUrl);
-      return;
-    }
+  // Try Ollama first, fallback to built-in responses
+  const ollamaOk = ollamaClient.connected || await ollamaClient.testConnection();
+
+  if (ollamaOk) {
+    await sendViaOllama(text);
+  } else {
+    // Built-in fallback response
+    const response = generateFallbackResponse(text);
+    chatMessages.push({ role: 'assistant', content: response });
+    appendChatBubble('assistant', response);
+    avatarSpeak(response);
+  }
+}
+
+function generateFallbackResponse(userText) {
+  const lower = userText.toLowerCase();
+
+  // Get therapy context
+  let state = 'balanced';
+  let dir = therapyEngine.getDirection(state);
+  if (lastProfile) {
+    state = AlphaEye.getDominantState(lastProfile.params);
+    dir = therapyEngine.getDirection(state);
   }
 
-  // System prompt
+  // Greeting responses
+  if (lower.match(/^(hi|hello|hey|good morning|good evening)/)) {
+    const greetings = [
+      "Hello! How are you feeling right now?",
+      "Hi there! I'm here to chat. What's on your mind?",
+      "Hey! It's nice to talk with you. How's your day going?",
+    ];
+    return greetings[Math.floor(Math.random() * greetings.length)];
+  }
+
+  // Feeling/emotion questions
+  if (lower.match(/(how am i|my results|my scan|my reading|what did you see|tell me more)/)) {
+    if (lastProfile) {
+      const p = lastProfile.params;
+      const quadrant = lastProfile.stateOfMind.quadrant;
+      return `Based on your reading, you're in a ${quadrant.toLowerCase()} state. Your stress is at ${p.stress}, energy at ${p.energy}, and balance at ${p.balance}. ${dir.techniques[0]} might help you feel even better.`;
+    }
+    return "I haven't had a chance to read you fully yet. Let me scan you — just say 'read me' when you're ready!";
+  }
+
+  // Stress/anxiety
+  if (lower.match(/(stress|anxious|worried|nervous|overwhelm)/)) {
+    return `I hear you. ${dir.techniques[Math.floor(Math.random() * dir.techniques.length)]} can really help. Take a slow, deep breath with me — in for 4 counts, hold for 4, out for 6.`;
+  }
+
+  // Sad/down
+  if (lower.match(/(sad|down|depressed|lonely|unhappy)/)) {
+    return "I'm sorry you're feeling that way. It takes courage to express that. Remember, it's okay to not be okay. Would you like to try a gratitude practice or just talk about what's bothering you?";
+  }
+
+  // Tired/energy
+  if (lower.match(/(tired|exhausted|no energy|fatigue|sleepy)/)) {
+    return "It sounds like your energy is low. A short 5-minute walk or some gentle stretching can help boost your energy naturally. Even a few deep breaths can make a difference.";
+  }
+
+  // Angry
+  if (lower.match(/(angry|frustrated|annoyed|mad|irritat)/)) {
+    return "I understand frustration can be intense. Let's try to channel that energy — take a moment to breathe deeply. Sometimes naming what triggered the feeling helps process it.";
+  }
+
+  // Help
+  if (lower.match(/(help|what can you do|what do you do)/)) {
+    return "I can read your mental state through facial analysis, provide therapeutic guidance, and chat about how you're feeling. I use opposite-therapy — if you're stressed, I guide you toward calm. Try saying 'read me' for a new scan!";
+  }
+
+  // Thank you
+  if (lower.match(/(thank|thanks)/)) {
+    return "You're very welcome! I'm always here when you need someone to talk to. Take care of yourself.";
+  }
+
+  // Therapy-directed response based on scan state
+  const technique = dir.techniques[Math.floor(Math.random() * dir.techniques.length)];
+  const responses = [
+    `That's interesting. Based on how you're feeling, I'd suggest trying ${technique}. What do you think?`,
+    `I appreciate you sharing that. My ${dir.label.toLowerCase()} approach suggests ${technique} might be helpful right now.`,
+    `Thank you for opening up. A good practice right now would be ${technique}. Would you like to try it together?`,
+  ];
+  return responses[Math.floor(Math.random() * responses.length)];
+}
+
+async function sendViaOllama(text) {
   let systemPrompt = 'You are MicroSense, a warm and caring AI companion. Keep responses brief (2-3 sentences).';
   if (lastProfile) {
     systemPrompt = therapyEngine.buildSystemPrompt(lastProfile);
   }
 
-  // Typing indicator
   const typingEl = appendTypingIndicator();
 
   try {
@@ -568,15 +643,16 @@ async function sendMessage() {
     if (typingEl) typingEl.remove();
     chatMessages.push({ role: 'assistant', content: fullResponse });
     appendChatBubble('assistant', fullResponse);
-
-    // Avatar speaks the response
     if (fullResponse) avatarSpeak(fullResponse);
 
   } catch (err) {
     if (typingEl) typingEl.remove();
     if (err.name !== 'AbortError') {
-      appendChatBubble('assistant', 'Sorry, I encountered an error. Please try again.');
-      console.error('Chat error:', err);
+      // Fallback on error
+      const response = generateFallbackResponse(text);
+      chatMessages.push({ role: 'assistant', content: response });
+      appendChatBubble('assistant', response);
+      avatarSpeak(response);
     }
   }
 }
@@ -612,10 +688,11 @@ function appendTypingIndicator() {
 }
 
 // ============================================
-// SPEECH RECOGNITION
+// SPEECH RECOGNITION (Continuous mode)
 // ============================================
 let recognition = null;
 let isListening = false;
+let voiceSilenceTimer = null;
 
 function toggleSpeechRecognition() {
   if (isListening) { stopListening(); return; }
@@ -626,29 +703,70 @@ function toggleSpeechRecognition() {
   recognition = new SR();
   recognition.lang = settings.language === 'ja' ? 'ja-JP' : settings.language === 'zh' ? 'zh-CN' : 'en-US';
   recognition.interimResults = true;
-  recognition.continuous = false;
+  recognition.continuous = true;
 
   document.getElementById('btnMic').classList.add('recording');
   isListening = true;
+  showToast('Mic is on — speak anytime', 'info');
 
   recognition.onresult = (e) => {
-    const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
-    document.getElementById('chatInput').value = transcript;
-    document.getElementById('btnSend').disabled = !transcript.trim();
+    let finalTranscript = '';
+    let interimTranscript = '';
+
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) {
+        finalTranscript += t;
+      } else {
+        interimTranscript += t;
+      }
+    }
+
+    const input = document.getElementById('chatInput');
+
+    if (finalTranscript) {
+      input.value = finalTranscript;
+      document.getElementById('btnSend').disabled = false;
+
+      // Auto-send after a short pause when speech is final
+      clearTimeout(voiceSilenceTimer);
+      voiceSilenceTimer = setTimeout(() => {
+        if (input.value.trim()) sendMessage();
+      }, 1200);
+    } else if (interimTranscript) {
+      input.value = interimTranscript;
+      input.placeholder = 'Listening...';
+      document.getElementById('btnSend').disabled = !interimTranscript.trim();
+      clearTimeout(voiceSilenceTimer);
+    }
   };
 
   recognition.onend = () => {
-    stopListening();
-    if (document.getElementById('chatInput').value.trim()) sendMessage();
+    // Auto-restart in continuous mode
+    if (isListening) {
+      try { recognition.start(); } catch (e) { stopListening(); }
+    }
   };
 
-  recognition.onerror = () => stopListening();
+  recognition.onerror = (e) => {
+    if (e.error === 'no-speech') {
+      // Keep listening, just no speech detected yet
+      if (isListening) {
+        try { recognition.start(); } catch (ex) { stopListening(); }
+      }
+    } else if (e.error !== 'aborted') {
+      stopListening();
+    }
+  };
+
   recognition.start();
 }
 
 function stopListening() {
   isListening = false;
+  clearTimeout(voiceSilenceTimer);
   document.getElementById('btnMic').classList.remove('recording');
+  document.getElementById('chatInput').placeholder = 'Talk to me...';
   if (recognition) { try { recognition.stop(); } catch (e) {} recognition = null; }
 }
 
