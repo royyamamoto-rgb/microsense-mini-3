@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0a0a1a">
 <title>MicroSense Mini 3 - AI Companion</title>
-<meta name="description" content="AI-powered psycho-physiological analysis with therapeutic conversation and 3D avatar companion.">
+<meta name="description" content="AI-powered psycho-physiological analysis with therapeutic conversation and animated avatar companion.">
 <link rel="manifest" href="manifest.json">
 
 <style>
@@ -89,7 +89,6 @@ body {
   color: var(--text-primary);
   min-height: 100vh;
   transition: background var(--transition), color var(--transition);
-  padding-bottom: 90px;
   overflow-x: hidden;
 }
 
@@ -118,10 +117,11 @@ img { max-width: 100%; display: block; }
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border-bottom: 1px solid var(--border-color);
-  padding: 12px 20px;
+  padding: 10px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  height: 52px;
 }
 
 .header-left {
@@ -131,18 +131,18 @@ img { max-width: 100%; display: block; }
 }
 
 .header-logo {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   background: var(--gradient-primary);
-  border-radius: 10px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .header-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.3px;
 }
@@ -154,11 +154,11 @@ img { max-width: 100%; display: block; }
 }
 
 .theme-toggle {
-  width: 52px;
-  height: 28px;
+  width: 48px;
+  height: 26px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 14px;
+  border-radius: 13px;
   position: relative;
   cursor: pointer;
   transition: background var(--transition);
@@ -169,8 +169,8 @@ img { max-width: 100%; display: block; }
 
 .theme-toggle::before {
   content: '';
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   background: var(--accent-purple);
   border-radius: 50%;
   position: absolute;
@@ -179,13 +179,13 @@ img { max-width: 100%; display: block; }
 }
 
 [data-theme="light"] .theme-toggle::before {
-  transform: translateX(24px);
+  transform: translateX(22px);
   background: var(--accent-orange);
 }
 
 .theme-toggle .icon-moon,
 .theme-toggle .icon-sun {
-  font-size: 12px;
+  font-size: 11px;
   z-index: 1;
   transition: opacity var(--transition);
 }
@@ -209,36 +209,10 @@ img { max-width: 100%; display: block; }
 .status-dot.scanning { background: var(--accent-purple); }
 
 /* ============================================
-   CONTENT CONTAINER
-   ============================================ */
-.content {
-  max-width: 600px;
-  margin: 0 auto;
-  padding: 0 16px;
-}
-
-.section {
-  margin-bottom: 20px;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 4px 10px;
-}
-
-.section-title {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.3px;
-}
-
-/* ============================================
-   TAB PANELS
+   CONTENT & TABS
    ============================================ */
 .tab-panel { display: none; }
-.tab-panel.active { display: block; }
+.tab-panel.active { display: flex; flex-direction: column; }
 
 /* ============================================
    BOTTOM NAV
@@ -255,15 +229,16 @@ img { max-width: 100%; display: block; }
   border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: space-around;
-  padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+  padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
+  height: auto;
 }
 
 .nav-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding: 6px 16px;
+  gap: 2px;
+  padding: 6px 20px;
   border-radius: 12px;
   cursor: pointer;
   transition: all var(--transition);
@@ -279,276 +254,352 @@ img { max-width: 100%; display: block; }
 .nav-label { font-size: 10px; font-weight: 600; }
 
 /* ============================================
-   SCAN TAB
+   HOME TAB (Avatar + Chat)
    ============================================ */
-.scan-header {
-  text-align: center;
-  padding: 16px 0 8px;
+#panelHome {
+  height: calc(100vh - 52px);
+  height: calc(100dvh - 52px);
+  overflow: hidden;
 }
 
-.scan-title {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
+#panelHome .content {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
-.scan-subtitle {
-  font-size: 14px;
-  color: var(--text-secondary);
-  margin-top: 4px;
-}
-
-/* Avatar Container */
-.avatar-container {
+/* Avatar Area */
+.avatar-area {
   width: 100%;
-  height: 200px;
+  flex-shrink: 0;
+  height: 38vh;
+  min-height: 220px;
+  max-height: 340px;
   background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
   overflow: hidden;
   position: relative;
+}
+
+.avatar-area canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Gender Toggle */
+.avatar-gender-toggle {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 3px;
+  z-index: 5;
+}
+
+.gender-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: inherit;
 }
 
-.avatar-container canvas {
+.gender-btn.active {
+  background: var(--accent-purple);
+  color: #fff;
+}
+
+[data-theme="light"] .avatar-gender-toggle {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+/* Therapy Badge */
+.therapy-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 16px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  display: none;
+  align-items: center;
+  gap: 5px;
+  z-index: 5;
+}
+
+.therapy-badge .badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+/* Scan Indicator */
+.scan-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.5));
+  display: none;
+  align-items: flex-end;
+  padding: 0 12px 6px;
+  z-index: 5;
+}
+
+.scan-indicator.active { display: flex; }
+
+.scan-indicator-inner {
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.scan-indicator-bar-bg {
+  flex: 1;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.scan-indicator-bar {
   height: 100%;
+  background: var(--accent-purple);
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.5s linear;
+  box-shadow: 0 0 6px rgba(124, 77, 255, 0.5);
 }
 
-.avatar-placeholder {
-  text-align: center;
-  color: var(--text-muted);
+.scan-indicator-text {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.avatar-placeholder .avatar-icon {
-  font-size: 64px;
-  margin-bottom: 8px;
-  filter: drop-shadow(0 0 20px rgba(124, 77, 255, 0.5));
-}
-
-.avatar-placeholder p {
-  font-size: 13px;
-}
-
+/* Avatar Speech Bubble */
 .avatar-speech {
   position: absolute;
-  bottom: 12px;
-  left: 12px;
-  right: 12px;
-  background: rgba(0, 0, 0, 0.7);
+  bottom: 36px;
+  left: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-radius: 12px;
-  padding: 10px 14px;
+  padding: 8px 12px;
   font-size: 13px;
   color: #fff;
   display: none;
+  z-index: 5;
+  line-height: 1.4;
 }
 
 .avatar-speech.visible { display: block; }
 
-/* Camera Container */
-.camera-container {
-  width: 100%;
-  aspect-ratio: 4/3;
-  background: #000;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  position: relative;
-  margin-bottom: 16px;
-  border: 2px solid var(--border-color);
-  transition: border-color var(--transition);
-}
-
-.camera-container.scanning {
-  border-color: var(--accent-purple);
-  box-shadow: 0 0 30px rgba(124, 77, 255, 0.3);
-}
-
-.camera-container video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transform: scaleX(-1);
-}
-
-.camera-container canvas {
+/* Rescan Button */
+.btn-rescan {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  transform: scaleX(-1);
-}
-
-.camera-status {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  background: rgba(0, 0, 0, 0.6);
+  bottom: 40px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #fff;
-  display: flex;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: none;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  z-index: 5;
 }
 
-.camera-status .dot {
+.btn-rescan.visible { display: flex; }
+.btn-rescan:hover { background: var(--accent-purple); color: #fff; }
+
+/* Chat Messages */
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.chat-bubble {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.45;
+  animation: fadeIn 0.3s ease;
+  word-wrap: break-word;
+}
+
+.chat-bubble.assistant {
+  align-self: flex-start;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-bottom-left-radius: 4px;
+}
+
+.chat-bubble.user {
+  align-self: flex-end;
+  background: var(--accent-purple);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.chat-bubble.typing {
+  align-self: flex-start;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-bottom-left-radius: 4px;
+}
+
+.chat-bubble.system {
+  align-self: center;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.typing-dots {
+  display: flex;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.typing-dots span {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent-green);
+  background: var(--text-muted);
+  animation: typingBounce 1.4s infinite;
 }
 
-.camera-status .dot.active {
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-6px); }
+}
+
+/* Chat Input */
+.chat-input-bar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px calc(60px + env(safe-area-inset-bottom));
+  align-items: center;
+  flex-shrink: 0;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-color);
+}
+
+.chat-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 22px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color var(--transition);
+}
+
+.chat-input:focus {
+  border-color: var(--accent-purple);
+  outline: none;
+}
+
+.chat-input::placeholder { color: var(--text-muted); }
+
+.btn-mic, .btn-send {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.btn-mic {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.btn-mic.recording {
+  background: var(--accent-red);
+  border-color: var(--accent-red);
+  color: #fff;
   animation: pulse 1s infinite;
 }
 
-.face-count {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #fff;
-}
-
-/* Scan Controls */
-.scan-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  padding: 8px 0 16px;
-}
-
-.scan-ring-wrap {
-  width: 120px;
-  height: 120px;
-  position: relative;
-  display: none;
-}
-
-.scan-ring-wrap.active { display: block; }
-
-.scan-ring-svg {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-
-.scan-ring-bg {
-  fill: none;
-  stroke: var(--bg-input);
-  stroke-width: 6;
-}
-
-.scan-ring-progress {
-  fill: none;
-  stroke: var(--accent-purple);
-  stroke-width: 6;
-  stroke-linecap: round;
-  stroke-dasharray: 283;
-  stroke-dashoffset: 283;
-  transition: stroke-dashoffset 0.5s linear;
-  filter: drop-shadow(0 0 6px rgba(124, 77, 255, 0.6));
-}
-
-.scan-timer {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-}
-
-.scan-timer-value {
-  font-size: 32px;
-  font-weight: 800;
-  letter-spacing: -1px;
-  color: var(--accent-purple);
-}
-
-.scan-timer-label {
-  font-size: 10px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  font-weight: 600;
-}
-
-.btn-scan {
-  padding: 14px 40px;
-  border: none;
-  border-radius: 50px;
+.btn-send {
   background: var(--gradient-primary);
   color: #fff;
-  font-size: 16px;
-  font-weight: 700;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all var(--transition);
-  box-shadow: 0 4px 20px rgba(124, 77, 255, 0.4);
-  position: relative;
-  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(124, 77, 255, 0.3);
 }
 
-.btn-scan:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 30px rgba(124, 77, 255, 0.5);
-}
-
-.btn-scan:active { transform: translateY(0); }
-
-.btn-scan:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.btn-scan.stop {
-  background: var(--gradient-alert);
-  box-shadow: 0 4px 20px rgba(255, 82, 82, 0.4);
-}
-
-.scan-status-text {
-  font-size: 13px;
-  color: var(--text-secondary);
-  text-align: center;
-}
+.btn-send:hover { transform: scale(1.05); }
+.btn-send:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
 /* ============================================
    RESULTS TAB
    ============================================ */
+#panelResults .content {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 0 16px;
+  padding-bottom: calc(70px + env(safe-area-inset-bottom));
+}
+
 .results-header {
   text-align: center;
   padding: 16px 0 8px;
-}
-
-.results-avatar-strip {
-  width: 100%;
-  height: 80px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  margin-bottom: 16px;
-  overflow: hidden;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .no-results {
@@ -584,9 +635,7 @@ img { max-width: 100%; display: block; }
   transition: all var(--transition);
 }
 
-.result-card:hover {
-  box-shadow: var(--shadow-lg);
-}
+.result-card:hover { box-shadow: var(--shadow-lg); }
 
 .result-card-title {
   font-size: 15px;
@@ -597,42 +646,18 @@ img { max-width: 100%; display: block; }
   gap: 8px;
 }
 
-.result-card-title .card-icon {
-  font-size: 20px;
-}
+.result-card-title .card-icon { font-size: 20px; }
 
 /* Radar Chart */
-.radar-wrap {
-  display: flex;
-  justify-content: center;
-  padding: 8px 0;
-}
-
-.radar-wrap svg {
-  max-width: 320px;
-  width: 100%;
-}
+.radar-wrap { display: flex; justify-content: center; padding: 8px 0; }
+.radar-wrap svg { max-width: 320px; width: 100%; }
 
 /* Quadrant Chart */
-.quadrant-wrap {
-  position: relative;
-  width: 100%;
-  max-width: 300px;
-  aspect-ratio: 1;
-  margin: 0 auto;
-}
-
-.quadrant-wrap svg {
-  width: 100%;
-  height: 100%;
-}
+.quadrant-wrap { position: relative; width: 100%; max-width: 300px; aspect-ratio: 1; margin: 0 auto; }
+.quadrant-wrap svg { width: 100%; height: 100%; }
 
 /* Gauge */
-.gauge-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
+.gauge-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
 .gauge-card {
   background: var(--bg-secondary);
@@ -641,24 +666,9 @@ img { max-width: 100%; display: block; }
   text-align: center;
 }
 
-.gauge-card svg {
-  width: 100px;
-  height: 60px;
-  margin: 0 auto 8px;
-}
-
-.gauge-value {
-  font-size: 24px;
-  font-weight: 800;
-}
-
-.gauge-label {
-  font-size: 11px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  font-weight: 600;
-  margin-top: 4px;
-}
+.gauge-card svg { width: 100px; height: 60px; margin: 0 auto 8px; }
+.gauge-value { font-size: 24px; font-weight: 800; }
+.gauge-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; margin-top: 4px; }
 
 /* Histogram */
 .histogram-bars {
@@ -670,56 +680,17 @@ img { max-width: 100%; display: block; }
   padding-top: 8px;
 }
 
-.histogram-bar-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  height: 100%;
-}
-
-.histogram-bar-wrap {
-  flex: 1;
-  width: 100%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.histogram-bar {
-  width: 80%;
-  border-radius: 4px 4px 2px 2px;
-  transition: height 0.8s ease;
-  position: relative;
-}
-
-.histogram-label {
-  font-size: 8px;
-  color: var(--text-muted);
-  font-weight: 600;
-  text-align: center;
-  line-height: 1.2;
-  max-width: 100%;
-  overflow: hidden;
-}
+.histogram-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; }
+.histogram-bar-wrap { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.histogram-bar { width: 80%; border-radius: 4px 4px 2px 2px; transition: height 0.8s ease; }
+.histogram-label { font-size: 8px; color: var(--text-muted); font-weight: 600; text-align: center; line-height: 1.2; }
 
 /* I-E Timeline */
-.timeline-chart {
-  height: 80px;
-}
-
-.timeline-chart svg {
-  width: 100%;
-  height: 100%;
-}
+.timeline-chart { height: 80px; }
+.timeline-chart svg { width: 100%; height: 100%; }
 
 /* Condition Alerts */
-.condition-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+.condition-list { display: flex; flex-direction: column; gap: 8px; }
 
 .condition-item {
   display: flex;
@@ -730,41 +701,22 @@ img { max-width: 100%; display: block; }
   border-radius: var(--radius-sm);
 }
 
-.condition-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
+.condition-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .condition-info { flex: 1; }
+.condition-name { font-size: 14px; font-weight: 600; }
+.condition-detail { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.condition-likelihood { font-size: 14px; font-weight: 700; }
 
-.condition-name {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.condition-detail {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-top: 2px;
-}
-
-.condition-likelihood {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-/* Chat CTA */
+/* Chat CTA in Results */
 .chat-cta {
   display: block;
   width: 100%;
-  padding: 16px;
+  padding: 14px;
   border: none;
   border-radius: var(--radius-md);
   background: var(--gradient-primary);
   color: #fff;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   font-family: inherit;
   cursor: pointer;
@@ -780,199 +732,18 @@ img { max-width: 100%; display: block; }
 }
 
 /* ============================================
-   CHAT TAB
-   ============================================ */
-.chat-avatar-area {
-  width: 100%;
-  height: 35vh;
-  min-height: 200px;
-  max-height: 300px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  margin-bottom: 12px;
-  overflow: hidden;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.therapy-badge {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-radius: 20px;
-  padding: 6px 12px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.therapy-badge .badge-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 4px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: calc(100vh - 35vh - 200px);
-  min-height: 120px;
-}
-
-.chat-bubble {
-  max-width: 85%;
-  padding: 12px 16px;
-  border-radius: 18px;
-  font-size: 14px;
-  line-height: 1.5;
-  animation: fadeIn 0.3s ease;
-}
-
-.chat-bubble.assistant {
-  align-self: flex-start;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-bottom-left-radius: 4px;
-}
-
-.chat-bubble.user {
-  align-self: flex-end;
-  background: var(--accent-purple);
-  color: #fff;
-  border-bottom-right-radius: 4px;
-}
-
-.chat-bubble.typing {
-  align-self: flex-start;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-bottom-left-radius: 4px;
-}
-
-.typing-dots {
-  display: flex;
-  gap: 4px;
-  padding: 4px 0;
-}
-
-.typing-dots span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  animation: typingBounce 1.4s infinite;
-}
-
-.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
-.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes typingBounce {
-  0%, 60%, 100% { transform: translateY(0); }
-  30% { transform: translateY(-6px); }
-}
-
-.chat-input-bar {
-  display: flex;
-  gap: 8px;
-  padding: 12px 0;
-  align-items: center;
-}
-
-.chat-input {
-  flex: 1;
-  padding: 12px 16px;
-  border: 1px solid var(--border-color);
-  border-radius: 24px;
-  background: var(--bg-card);
-  color: var(--text-primary);
-  font-size: 14px;
-  font-family: inherit;
-  transition: border-color var(--transition);
-}
-
-.chat-input:focus {
-  border-color: var(--accent-purple);
-  outline: none;
-}
-
-.chat-input::placeholder {
-  color: var(--text-muted);
-}
-
-.btn-mic, .btn-send {
-  width: 44px;
-  height: 44px;
-  border: none;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  cursor: pointer;
-  transition: all var(--transition);
-  flex-shrink: 0;
-}
-
-.btn-mic {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-}
-
-.btn-mic.recording {
-  background: var(--accent-red);
-  border-color: var(--accent-red);
-  color: #fff;
-  animation: pulse 1s infinite;
-}
-
-.btn-send {
-  background: var(--gradient-primary);
-  color: #fff;
-  box-shadow: 0 2px 10px rgba(124, 77, 255, 0.3);
-}
-
-.btn-send:hover {
-  transform: scale(1.05);
-}
-
-.btn-send:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  transform: none;
-}
-
-/* ============================================
    SETTINGS TAB
    ============================================ */
-.settings-header {
-  padding: 16px 0 8px;
+#panelSettings .content {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 0 16px;
+  padding-bottom: calc(70px + env(safe-area-inset-bottom));
 }
 
-.settings-title {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-}
-
-.settings-subtitle {
-  font-size: 14px;
-  color: var(--text-secondary);
-  margin-top: 4px;
-}
+.settings-header { padding: 16px 0 8px; }
+.settings-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+.settings-subtitle { font-size: 14px; color: var(--text-secondary); margin-top: 4px; }
 
 .settings-group {
   background: var(--bg-card);
@@ -995,38 +766,34 @@ img { max-width: 100%; display: block; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border-color);
   cursor: pointer;
 }
 
 .setting-item:last-child { border-bottom: none; }
 
-.setting-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+.setting-left { display: flex; align-items: center; gap: 12px; }
 
 .setting-icon {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 14px;
 }
 
-.setting-label { font-size: 15px; font-weight: 500; }
-.setting-value { font-size: 14px; color: var(--text-muted); }
+.setting-label { font-size: 14px; font-weight: 500; }
+.setting-value { font-size: 13px; color: var(--text-muted); }
 
 .setting-toggle {
-  width: 48px;
-  height: 28px;
+  width: 46px;
+  height: 26px;
   background: var(--bg-input);
   border: none;
-  border-radius: 14px;
+  border-radius: 13px;
   position: relative;
   cursor: pointer;
   transition: background var(--transition);
@@ -1036,8 +803,8 @@ img { max-width: 100%; display: block; }
 
 .setting-toggle::after {
   content: '';
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   background: #fff;
   border-radius: 50%;
   position: absolute;
@@ -1046,12 +813,10 @@ img { max-width: 100%; display: block; }
   transition: transform var(--transition);
 }
 
-.setting-toggle.on::after {
-  transform: translateX(20px);
-}
+.setting-toggle.on::after { transform: translateX(20px); }
 
 .setting-input {
-  width: 180px;
+  width: 160px;
   padding: 6px 10px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
@@ -1062,10 +827,7 @@ img { max-width: 100%; display: block; }
   text-align: right;
 }
 
-.setting-input:focus {
-  border-color: var(--accent-purple);
-  outline: none;
-}
+.setting-input:focus { border-color: var(--accent-purple); outline: none; }
 
 .setting-select {
   padding: 6px 10px;
@@ -1090,10 +852,7 @@ img { max-width: 100%; display: block; }
   transition: all var(--transition);
 }
 
-.btn-test:hover {
-  background: var(--accent-purple);
-  color: #fff;
-}
+.btn-test:hover { background: var(--accent-purple); color: #fff; }
 
 .duration-selector {
   display: flex;
@@ -1122,12 +881,8 @@ img { max-width: 100%; display: block; }
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
-/* Scan History */
-.history-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+/* History */
+.history-list { display: flex; flex-direction: column; gap: 8px; }
 
 .history-item {
   display: flex;
@@ -1140,29 +895,14 @@ img { max-width: 100%; display: block; }
   transition: all var(--transition);
 }
 
-.history-item:hover {
-  background: var(--bg-card-hover);
-}
-
-.history-icon {
-  font-size: 24px;
-}
-
+.history-item:hover { background: var(--bg-card-hover); }
+.history-icon { font-size: 22px; }
 .history-info { flex: 1; }
-
-.history-date {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.history-summary {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-top: 2px;
-}
+.history-date { font-size: 13px; font-weight: 600; }
+.history-summary { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
 
 .history-state {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   padding: 4px 10px;
   border-radius: 10px;
@@ -1173,7 +913,7 @@ img { max-width: 100%; display: block; }
    ============================================ */
 .toast {
   position: fixed;
-  bottom: 100px;
+  bottom: 90px;
   left: 50%;
   transform: translateX(-50%) translateY(20px);
   background: var(--bg-card);
@@ -1189,11 +929,7 @@ img { max-width: 100%; display: block; }
   pointer-events: none;
 }
 
-.toast.show {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast.success { border-left: 3px solid var(--accent-green); }
 .toast.error { border-left: 3px solid var(--accent-red); }
 .toast.info { border-left: 3px solid var(--accent-purple); }
@@ -1202,13 +938,8 @@ img { max-width: 100%; display: block; }
    ANIMATIONS
    ============================================ */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-in {
-  animation: fadeIn 0.5s ease forwards;
-  opacity: 0;
 }
 
 @keyframes pulse {
@@ -1216,33 +947,16 @@ img { max-width: 100%; display: block; }
   50% { transform: scale(1.1); opacity: 0.7; }
 }
 
-@keyframes scanLine {
-  0% { top: 0; }
-  100% { top: 100%; }
-}
-
-.scan-line {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent-purple), transparent);
-  box-shadow: 0 0 10px var(--accent-purple), 0 0 20px rgba(124, 77, 255, 0.3);
-  animation: scanLine 2s linear infinite;
-  display: none;
-}
-
-.camera-container.scanning .scan-line { display: block; }
-
 /* ============================================
    RESPONSIVE
    ============================================ */
 @media (max-width: 380px) {
   .gauge-row { grid-template-columns: 1fr; }
+  .avatar-area { min-height: 200px; height: 34vh; }
 }
 
 @media (min-width: 768px) {
-  .content { max-width: 700px; }
+  #panelResults .content, #panelSettings .content { max-width: 700px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1250,6 +964,17 @@ img { max-width: 100%; display: block; }
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Hidden camera */
+.hidden-camera {
+  position: fixed;
+  top: -9999px;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  pointer-events: none;
 }
 </style>
 </head>
@@ -1273,53 +998,52 @@ img { max-width: 100%; display: block; }
 </header>
 
 <!-- ============================================
-     TAB: SCAN
+     TAB: HOME (Avatar + Chat)
      ============================================ -->
-<div class="tab-panel active" id="panelScan">
+<div class="tab-panel active" id="panelHome">
 <div class="content">
 
-  <div class="scan-header animate-in">
-    <div class="scan-title">Neural Scan</div>
-    <div class="scan-subtitle">33-second psycho-physiological analysis</div>
-  </div>
+  <!-- Avatar Area -->
+  <div class="avatar-area" id="avatarArea">
+    <canvas id="avatarCanvas"></canvas>
 
-  <!-- Avatar -->
-  <div class="avatar-container animate-in" style="animation-delay:0.1s" id="scanAvatarContainer">
-    <div class="avatar-placeholder" id="avatarPlaceholder">
-      <div class="avatar-icon">&#129504;</div>
-      <p>3D Avatar loading in Phase 3...</p>
+    <!-- Gender Toggle -->
+    <div class="avatar-gender-toggle" id="genderToggle">
+      <button class="gender-btn active" data-gender="female" aria-label="Female avatar">&#9792;</button>
+      <button class="gender-btn" data-gender="male" aria-label="Male avatar">&#9794;</button>
     </div>
+
+    <!-- Therapy Badge -->
+    <div class="therapy-badge" id="therapyBadge">
+      <span class="badge-dot" id="badgeDot"></span>
+      <span id="badgeText">Balanced</span>
+    </div>
+
+    <!-- Rescan Button (visible after first scan) -->
+    <button class="btn-rescan" id="btnRescan" title="New scan">&#8635;</button>
+
+    <!-- Avatar Speech Bubble -->
     <div class="avatar-speech" id="avatarSpeech"></div>
-  </div>
 
-  <!-- Camera -->
-  <div class="camera-container animate-in" style="animation-delay:0.2s" id="cameraContainer">
-    <video id="cameraVideo" autoplay playsinline muted></video>
-    <canvas id="cameraOverlay"></canvas>
-    <div class="scan-line"></div>
-    <div class="camera-status" id="cameraStatus">
-      <span class="dot" id="cameraDot"></span>
-      <span id="cameraLabel">Camera off</span>
-    </div>
-    <div class="face-count" id="faceCount" style="display:none">
-      <span id="faceCountText">0 faces</span>
-    </div>
-  </div>
-
-  <!-- Scan Controls -->
-  <div class="scan-controls animate-in" style="animation-delay:0.3s">
-    <div class="scan-ring-wrap" id="scanRingWrap">
-      <svg class="scan-ring-svg" viewBox="0 0 100 100">
-        <circle class="scan-ring-bg" cx="50" cy="50" r="45"/>
-        <circle class="scan-ring-progress" id="scanRingProgress" cx="50" cy="50" r="45"/>
-      </svg>
-      <div class="scan-timer">
-        <div class="scan-timer-value" id="scanTimerValue">33</div>
-        <div class="scan-timer-label">seconds</div>
+    <!-- Scan Progress Indicator -->
+    <div class="scan-indicator" id="scanIndicator">
+      <div class="scan-indicator-inner">
+        <div class="scan-indicator-bar-bg">
+          <div class="scan-indicator-bar" id="scanIndicatorBar"></div>
+        </div>
+        <span class="scan-indicator-text" id="scanIndicatorText">Reading...</span>
       </div>
     </div>
-    <button class="btn-scan" id="btnScan" disabled>Start Scan</button>
-    <div class="scan-status-text" id="scanStatus">Loading face detection models...</div>
+  </div>
+
+  <!-- Chat Messages -->
+  <div class="chat-messages" id="chatMessages"></div>
+
+  <!-- Chat Input -->
+  <div class="chat-input-bar">
+    <button class="btn-mic" id="btnMic" title="Voice input">&#127908;</button>
+    <input type="text" class="chat-input" id="chatInput" placeholder="Talk to me..." autocomplete="off">
+    <button class="btn-send" id="btnSend" disabled title="Send message">&#10148;</button>
   </div>
 
 </div>
@@ -1330,45 +1054,12 @@ img { max-width: 100%; display: block; }
      ============================================ -->
 <div class="tab-panel" id="panelResults">
 <div class="content">
-  <div class="results-avatar-strip" id="resultsAvatarStrip">
-    <div class="avatar-placeholder" style="transform:scale(0.6)">
-      <div class="avatar-icon">&#129504;</div>
-    </div>
-  </div>
   <div id="resultsContent">
     <div class="no-results">
       <div class="no-icon">&#128269;</div>
       <h3>No Scan Results Yet</h3>
-      <p>Complete a 33-second neural scan to see your psycho-physiological profile.</p>
+      <p>Your companion will read you automatically during conversation.</p>
     </div>
-  </div>
-</div>
-</div>
-
-<!-- ============================================
-     TAB: CHAT
-     ============================================ -->
-<div class="tab-panel" id="panelChat">
-<div class="content">
-  <div class="chat-avatar-area" id="chatAvatarArea">
-    <div class="avatar-placeholder">
-      <div class="avatar-icon">&#129504;</div>
-      <p>Your AI companion</p>
-    </div>
-    <div class="therapy-badge" id="therapyBadge" style="display:none">
-      <span class="badge-dot" id="badgeDot"></span>
-      <span id="badgeText">Balanced</span>
-    </div>
-  </div>
-  <div class="chat-messages" id="chatMessages">
-    <div class="chat-bubble assistant">
-      Hi! I'm your MicroSense companion. Complete a scan first, then we can chat about your results and well-being.
-    </div>
-  </div>
-  <div class="chat-input-bar">
-    <button class="btn-mic" id="btnMic" title="Voice input">&#127908;</button>
-    <input type="text" class="chat-input" id="chatInput" placeholder="Type a message..." autocomplete="off">
-    <button class="btn-send" id="btnSend" disabled title="Send message">&#10148;</button>
   </div>
 </div>
 </div>
@@ -1387,20 +1078,16 @@ img { max-width: 100%; display: block; }
 </div>
 
 <!-- ============================================
-     BOTTOM NAV
+     BOTTOM NAV (3 tabs)
      ============================================ -->
 <nav class="bottom-nav" role="navigation" aria-label="Main navigation">
-  <button class="nav-item active" data-tab="panelScan" aria-label="Neural scan">
-    <span class="nav-icon">&#128065;</span>
-    <span class="nav-label">Scan</span>
+  <button class="nav-item active" data-tab="panelHome" aria-label="Home">
+    <span class="nav-icon">&#127968;</span>
+    <span class="nav-label">Home</span>
   </button>
   <button class="nav-item" data-tab="panelResults" aria-label="Analysis results">
     <span class="nav-icon">&#128200;</span>
     <span class="nav-label">Results</span>
-  </button>
-  <button class="nav-item" data-tab="panelChat" aria-label="Therapy chat">
-    <span class="nav-icon">&#128172;</span>
-    <span class="nav-label">Chat</span>
   </button>
   <button class="nav-item" data-tab="panelSettings" aria-label="App settings">
     <span class="nav-icon">&#9881;&#65039;</span>
@@ -1410,21 +1097,28 @@ img { max-width: 100%; display: block; }
 
 <div class="toast" id="toast"></div>
 
+<!-- Hidden Camera (for background scanning) -->
+<div class="hidden-camera" id="hiddenCamera">
+  <video id="cameraVideo" autoplay playsinline muted></video>
+  <canvas id="cameraOverlay"></canvas>
+</div>
+
 <!-- External Libraries -->
 <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
 
-<!-- Engine Files (copied from Mini 2) -->
+<!-- Engine Files (from Mini 2) -->
 <script src="js/camera.js"></script>
 <script src="js/threat-engine.js"></script>
 <script src="js/deception-engine.js"></script>
 <script src="js/neuro-analyzer.js"></script>
 <script src="js/voice-stress-engine.js"></script>
 
-<!-- New MicroSense Mini 3 Files -->
-<script src="js/alpha-eye.js?v=1"></script>
-<script src="js/charts.js?v=1"></script>
-<script src="js/ollama.js?v=1"></script>
-<script src="js/therapy.js?v=1"></script>
-<script src="js/app.js?v=1"></script>
+<!-- MicroSense Mini 3 -->
+<script src="js/alpha-eye.js?v=2"></script>
+<script src="js/charts.js?v=2"></script>
+<script src="js/ollama.js?v=2"></script>
+<script src="js/therapy.js?v=2"></script>
+<script src="js/avatar.js?v=2"></script>
+<script src="js/app.js?v=2"></script>
 </body>
 </html>

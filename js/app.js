@@ -1,6 +1,6 @@
 /**
  * MicroSense Mini 3 - Main Application Orchestrator
- * Manages scan flow, tab navigation, settings, chat, and engine coordination
+ * Avatar-first landing page with integrated chat and background scanning
  */
 
 (function() {
@@ -29,10 +29,7 @@ let scanHistory = loadHistory();
 function loadSettings() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return { ...DEFAULTS, ...parsed };
-    }
+    if (saved) return { ...DEFAULTS, ...JSON.parse(saved) };
   } catch {}
   return { ...DEFAULTS };
 }
@@ -70,9 +67,7 @@ function showToast(msg, type) {
 // ============================================
 // THEME
 // ============================================
-function initTheme() {
-  setTheme(settings.theme);
-}
+function initTheme() { setTheme(settings.theme); }
 
 function setTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
@@ -85,42 +80,25 @@ function setTheme(theme) {
 }
 
 function toggleTheme() {
-  const current = document.documentElement.getAttribute('data-theme');
-  setTheme(current === 'light' ? 'dark' : 'light');
+  setTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
 }
-
-// ============================================
-// STATE MACHINE
-// ============================================
-const State = {
-  IDLE: 'idle',
-  LOADING_MODELS: 'loading_models',
-  READY: 'ready',
-  SCANNING: 'scanning',
-  ANALYZING: 'analyzing',
-  RESULTS: 'results'
-};
-
-let appState = State.IDLE;
-let modelsLoaded = false;
 
 // ============================================
 // ENGINE INSTANCES
 // ============================================
 let threatEngine, deceptionEngine, neuroAnalyzer, voiceStressEngine;
+let ollamaClient, therapyEngine, avatarEngine;
 let cameraStream = null;
 let audioStream = null;
+let isScanning = false;
 let scanTimer = null;
 let scanStartTime = null;
-let isScanning = false;
 let frameCount = 0;
 let lastProfile = null;
-let chatMonitorInterval = null;
-
-// Ollama + Therapy
-let ollamaClient = null;
-let therapyEngine = null;
+let modelsLoaded = false;
 let chatMessages = [];
+let monitorInterval = null;
+let lipSyncInterval = null;
 
 // ============================================
 // INITIALIZATION
@@ -128,11 +106,12 @@ let chatMessages = [];
 async function init() {
   initTheme();
   initNav();
+  initChat();
+  initGenderToggle();
 
-  const themeToggle = document.getElementById('themeToggle');
-  if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
+  document.getElementById('themeToggle').addEventListener('click', toggleTheme);
 
-  // Init engines
+  // Engines
   threatEngine = new ThreatEngine();
   deceptionEngine = new DeceptionEngine();
   neuroAnalyzer = new NeuroAnalyzer();
@@ -140,47 +119,58 @@ async function init() {
   therapyEngine = new TherapyEngine();
   ollamaClient = new OllamaClient(settings.ollamaUrl, settings.ollamaModel);
 
+  // Avatar
+  avatarEngine = new AvatarEngine();
+  avatarEngine.setGender(settings.avatarGender);
+  avatarEngine.init(document.getElementById('avatarCanvas'));
+
+  // Sync gender toggle UI
+  document.querySelectorAll('.gender-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.gender === settings.avatarGender);
+  });
+
+  // Rescan button
+  document.getElementById('btnRescan').addEventListener('click', () => {
+    triggerScan();
+  });
+
   // Load face-api models
   await loadFaceModels();
 
-  // Check Ollama connection (background)
+  // Check Ollama (background)
   checkOllamaConnection();
 
-  // Init chat
-  initChat();
-
-  // Register service worker
+  // Service worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
+
+  // Start greeting sequence after models are loaded
+  startGreeting();
 }
 
 // ============================================
-// FACE-API MODEL LOADING
+// FACE-API MODELS
 // ============================================
 async function loadFaceModels() {
-  appState = State.LOADING_MODELS;
-  updateScanUI();
-
+  appendSystemMessage('Loading face detection models...');
   try {
     const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
     await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
     await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
     await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
     modelsLoaded = true;
-    appState = State.READY;
-    updateScanUI();
   } catch (err) {
     console.error('Model load error:', err);
-    appState = State.IDLE;
-    document.getElementById('scanStatus').textContent = 'Failed to load models. Refresh to retry.';
+    appendSystemMessage('Face detection failed to load. Some features unavailable.');
   }
 }
 
 // ============================================
-// CAMERA
+// CAMERA (Hidden)
 // ============================================
 async function startCamera() {
+  if (cameraStream) return true;
   const video = document.getElementById('cameraVideo');
   try {
     cameraStream = await navigator.mediaDevices.getUserMedia({
@@ -189,19 +179,12 @@ async function startCamera() {
     });
     video.srcObject = cameraStream;
     await video.play();
-
-    // Sync overlay canvas size
     const overlay = document.getElementById('cameraOverlay');
     overlay.width = video.videoWidth || 640;
     overlay.height = video.videoHeight || 480;
-
-    document.getElementById('cameraDot').classList.add('active');
-    document.getElementById('cameraLabel').textContent = 'Camera ready';
     return true;
   } catch (err) {
     console.error('Camera error:', err);
-    showToast('Camera access denied', 'error');
-    document.getElementById('cameraLabel').textContent = 'Camera denied';
     return false;
   }
 }
@@ -213,12 +196,10 @@ function stopCamera() {
   }
   const video = document.getElementById('cameraVideo');
   if (video) video.srcObject = null;
-  document.getElementById('cameraDot')?.classList.remove('active');
-  document.getElementById('cameraLabel').textContent = 'Camera off';
 }
 
 // ============================================
-// MICROPHONE (for VoiceStressEngine)
+// MICROPHONE
 // ============================================
 async function startMicrophone() {
   try {
@@ -226,7 +207,7 @@ async function startMicrophone() {
     await voiceStressEngine.initAudioContext(audioStream);
     return true;
   } catch (err) {
-    console.warn('Microphone access denied:', err);
+    console.warn('Microphone denied:', err);
     return false;
   }
 }
@@ -239,17 +220,92 @@ function stopMicrophone() {
 }
 
 // ============================================
-// SCAN FLOW
+// GREETING SEQUENCE
 // ============================================
-async function startScan() {
-  if (appState === State.SCANNING) {
-    stopScan();
+function startGreeting() {
+  // Step 1: Initial greeting
+  setTimeout(() => {
+    avatarSpeak("Hi! I'm MicroSense, your AI companion.");
+    appendChatBubble('assistant', "Hi! I'm MicroSense, your AI companion. I can read your mental state and provide personalized therapeutic guidance.");
+  }, 800);
+
+  // Step 2: Trigger scan
+  setTimeout(() => {
+    if (modelsLoaded) {
+      avatarSpeak("Let me read you...");
+      appendChatBubble('assistant', "Let me take a look at you... Hold still for a moment.");
+      setTimeout(() => triggerScan(), 1500);
+    } else {
+      appendChatBubble('assistant', "Feel free to chat with me anytime! I'm here to help.");
+    }
+  }, 4500);
+}
+
+// ============================================
+// AVATAR SPEECH + LIP SYNC
+// ============================================
+function avatarSpeak(text) {
+  // Show speech bubble
+  const bubble = document.getElementById('avatarSpeech');
+  bubble.textContent = text;
+  bubble.classList.add('visible');
+
+  // Hide after delay
+  const hideDelay = Math.max(3000, text.length * 60);
+  setTimeout(() => bubble.classList.remove('visible'), hideDelay);
+
+  // TTS with lip sync
+  if (settings.ttsEnabled && window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = settings.ttsSpeed;
+    utterance.pitch = 1.0;
+    if (settings.language === 'ja') utterance.lang = 'ja-JP';
+    else if (settings.language === 'zh') utterance.lang = 'zh-CN';
+    else utterance.lang = 'en-US';
+
+    utterance.onstart = () => {
+      avatarEngine.setState('speaking');
+      lipSyncInterval = setInterval(() => {
+        avatarEngine.setMouthOpen(Math.random() * 0.5 + 0.15);
+      }, 110);
+    };
+
+    utterance.onend = () => {
+      clearInterval(lipSyncInterval);
+      lipSyncInterval = null;
+      avatarEngine.setMouthOpen(0);
+      avatarEngine.setState('idle');
+    };
+
+    utterance.onerror = () => {
+      clearInterval(lipSyncInterval);
+      lipSyncInterval = null;
+      avatarEngine.setMouthOpen(0);
+      avatarEngine.setState('idle');
+    };
+
+    window.speechSynthesis.speak(utterance);
+  }
+}
+
+// ============================================
+// SCAN FLOW (Background)
+// ============================================
+async function triggerScan() {
+  if (isScanning) return;
+  if (!modelsLoaded) {
+    showToast('Face detection not ready', 'error');
     return;
   }
 
   // Start camera
   const camOk = await startCamera();
-  if (!camOk) return;
+  if (!camOk) {
+    showToast('Camera access required for scanning', 'error');
+    appendChatBubble('assistant', "I couldn't access your camera. Please allow camera access and try again.");
+    return;
+  }
 
   // Start microphone
   await startMicrophone();
@@ -258,61 +314,63 @@ async function startScan() {
   threatEngine = new ThreatEngine();
   deceptionEngine = new DeceptionEngine();
 
-  appState = State.SCANNING;
   isScanning = true;
   frameCount = 0;
   scanStartTime = Date.now();
 
-  document.getElementById('cameraContainer').classList.add('scanning');
-  updateScanUI();
+  // Update UI
+  avatarEngine.setState('scanning');
+  avatarEngine.setScanProgress(0);
+  document.getElementById('scanIndicator').classList.add('active');
+  document.getElementById('scanIndicatorBar').style.width = '0%';
+  document.getElementById('btnRescan').classList.remove('visible');
+  document.getElementById('ollamaStatus').classList.add('scanning');
 
-  // Start detection loop
+  // Detection loop
   detectLoop();
 
-  // Start countdown
+  // Countdown
   const duration = settings.scanDuration * 1000;
   scanTimer = setInterval(() => {
     const elapsed = Date.now() - scanStartTime;
     const remaining = Math.max(0, duration - elapsed);
-    updateScanTimer(remaining, duration);
+    const progress = 1 - remaining / duration;
+
+    // Update indicators
+    document.getElementById('scanIndicatorBar').style.width = (progress * 100) + '%';
+    document.getElementById('scanIndicatorText').textContent = Math.ceil(remaining / 1000) + 's';
+    avatarEngine.setScanProgress(progress);
 
     if (remaining <= 0) {
       completeScan();
     }
-  }, 100);
+  }, 200);
 }
 
 function stopScan() {
   isScanning = false;
-  clearInterval(scanTimer);
-  scanTimer = null;
-  document.getElementById('cameraContainer').classList.remove('scanning');
-  appState = State.READY;
-  updateScanUI();
+  if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+  document.getElementById('scanIndicator').classList.remove('active');
+  avatarEngine.setState('idle');
+  avatarEngine.setScanProgress(0);
+  document.getElementById('ollamaStatus').classList.remove('scanning');
   stopCamera();
   stopMicrophone();
 }
 
 async function completeScan() {
   isScanning = false;
-  clearInterval(scanTimer);
-  scanTimer = null;
-  appState = State.ANALYZING;
-  updateScanUI();
-  document.getElementById('cameraContainer').classList.remove('scanning');
+  if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+  document.getElementById('scanIndicator').classList.remove('active');
+  document.getElementById('ollamaStatus').classList.remove('scanning');
 
-  // Run full analysis on all engines
   try {
     const vsaResult = voiceStressEngine.fullAnalysis();
     const threatResult = threatEngine.fullAnalysis('user');
     const deceptionResult = deceptionEngine.fullAnalysis('user', vsaResult);
-
-    // Get frame history from threat engine for NeuroAnalyzer
     const frameHistory = threatEngine.frameHistory ? threatEngine.frameHistory.get('user') : [];
-    const fps = 30;
-    const neuroResult = neuroAnalyzer.analyze(frameHistory || [], fps);
+    const neuroResult = neuroAnalyzer.analyze(frameHistory || [], 30);
 
-    // Compute AlphaEye profile
     lastProfile = AlphaEye.compute(threatResult, deceptionResult, neuroResult, vsaResult);
 
     // Save to history
@@ -324,36 +382,45 @@ async function completeScan() {
     });
     saveHistory();
 
-    // Show results
-    appState = State.RESULTS;
-    showResults();
-    showToast('Scan complete! Viewing results.', 'success');
+    // Avatar announces results
+    avatarEngine.setState('idle');
+    const state = AlphaEye.getDominantState(lastProfile.params);
+    const dir = therapyEngine.getDirection(state);
+    const quadrant = lastProfile.stateOfMind.quadrant;
 
-    // Navigate to results tab
-    setTimeout(() => {
-      document.querySelector('[data-tab="panelResults"]')?.click();
-    }, 500);
+    avatarSpeak("I've read you. You seem " + quadrant.toLowerCase() + ".");
+
+    appendChatBubble('assistant', "I've completed your reading! Your state of mind: " + quadrant + ". I'm here with " + dir.label.toLowerCase() + " guidance. Check the Results tab for your full profile, or let's talk about how you're feeling.");
+
+    // Update therapy badge
+    updateTherapyBadge(state);
+
+    // Show rescan button
+    document.getElementById('btnRescan').classList.add('visible');
+
+    // Render results
+    showResults();
+
+    // Start background monitoring
+    startMonitoring();
 
   } catch (err) {
     console.error('Analysis error:', err);
-    showToast('Analysis error: ' + err.message, 'error');
-    appState = State.READY;
+    avatarEngine.setState('idle');
+    appendChatBubble('assistant', "I had trouble reading you this time. Let's just chat instead!");
+    document.getElementById('btnRescan').classList.add('visible');
   }
 
-  updateScanUI();
   stopCamera();
   stopMicrophone();
 }
 
 // ============================================
-// FACE DETECTION LOOP
+// FACE DETECTION LOOP (Background)
 // ============================================
 async function detectLoop() {
   if (!isScanning) return;
-
   const video = document.getElementById('cameraVideo');
-  const overlay = document.getElementById('cameraOverlay');
-  const ctx = overlay.getContext('2d');
 
   try {
     const detections = await faceapi
@@ -361,155 +428,65 @@ async function detectLoop() {
       .withFaceLandmarks()
       .withFaceExpressions();
 
-    // Clear overlay
-    ctx.clearRect(0, 0, overlay.width, overlay.height);
-
     if (detections.length > 0) {
-      const det = detections[0];
       frameCount++;
+      threatEngine.processFrame('user', detections[0]);
+      deceptionEngine.processFrame('user', detections[0]);
 
-      // Feed to engines
-      threatEngine.processFrame('user', det);
-      deceptionEngine.processFrame('user', det);
-
-      // Process audio
       if (audioStream) {
         try { voiceStressEngine.processAudioFrame(); } catch (e) {}
       }
-
-      // Draw face overlay
-      drawFaceOverlay(ctx, det, overlay.width, overlay.height);
-
-      // Update face count
-      const fc = document.getElementById('faceCount');
-      fc.style.display = 'block';
-      document.getElementById('faceCountText').textContent = `${detections.length} face${detections.length > 1 ? 's' : ''} | ${frameCount} frames`;
-    } else {
-      const fc = document.getElementById('faceCount');
-      fc.style.display = 'block';
-      document.getElementById('faceCountText').textContent = 'No face detected';
     }
-  } catch (err) {
-    // Detection error, skip frame
-  }
+  } catch (e) {}
 
-  if (isScanning) {
-    requestAnimationFrame(detectLoop);
-  }
-}
-
-/**
- * Draw face mesh overlay on canvas
- */
-function drawFaceOverlay(ctx, detection, w, h) {
-  const landmarks = detection.landmarks;
-  if (!landmarks) return;
-
-  const pts = landmarks.positions;
-  const box = detection.detection.box;
-
-  // Scale factors (video may differ from canvas)
-  const scaleX = w / (document.getElementById('cameraVideo').videoWidth || w);
-  const scaleY = h / (document.getElementById('cameraVideo').videoHeight || h);
-
-  // Draw bounding box
-  ctx.strokeStyle = 'rgba(124, 77, 255, 0.6)';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(box.x * scaleX, box.y * scaleY, box.width * scaleX, box.height * scaleY);
-
-  // Draw landmark points
-  ctx.fillStyle = 'rgba(124, 77, 255, 0.8)';
-  pts.forEach(pt => {
-    ctx.beginPath();
-    ctx.arc(pt.x * scaleX, pt.y * scaleY, 1.5, 0, 2 * Math.PI);
-    ctx.fill();
-  });
-
-  // Draw landmark connections (jaw, eyes, nose, mouth)
-  ctx.strokeStyle = 'rgba(0, 229, 255, 0.4)';
-  ctx.lineWidth = 1;
-
-  // Jaw line (0-16)
-  drawPath(ctx, pts, scaleX, scaleY, Array.from({length: 17}, (_, i) => i));
-  // Left eyebrow (17-21)
-  drawPath(ctx, pts, scaleX, scaleY, [17,18,19,20,21]);
-  // Right eyebrow (22-26)
-  drawPath(ctx, pts, scaleX, scaleY, [22,23,24,25,26]);
-  // Nose bridge (27-30)
-  drawPath(ctx, pts, scaleX, scaleY, [27,28,29,30]);
-  // Left eye (36-41, closed)
-  drawPath(ctx, pts, scaleX, scaleY, [36,37,38,39,40,41,36]);
-  // Right eye (42-47, closed)
-  drawPath(ctx, pts, scaleX, scaleY, [42,43,44,45,46,47,42]);
-  // Outer lip (48-59, closed)
-  drawPath(ctx, pts, scaleX, scaleY, [48,49,50,51,52,53,54,55,56,57,58,59,48]);
-}
-
-function drawPath(ctx, pts, sx, sy, indices) {
-  ctx.beginPath();
-  indices.forEach((idx, i) => {
-    const p = pts[idx];
-    if (i === 0) ctx.moveTo(p.x * sx, p.y * sy);
-    else ctx.lineTo(p.x * sx, p.y * sy);
-  });
-  ctx.stroke();
+  if (isScanning) requestAnimationFrame(detectLoop);
 }
 
 // ============================================
-// SCAN UI UPDATES
+// BACKGROUND MONITORING (5fps during chat)
 // ============================================
-function updateScanUI() {
-  const btn = document.getElementById('btnScan');
-  const status = document.getElementById('scanStatus');
-  const ringWrap = document.getElementById('scanRingWrap');
+function startMonitoring() {
+  if (monitorInterval) return;
 
-  switch (appState) {
-    case State.LOADING_MODELS:
-      btn.disabled = true;
-      btn.textContent = 'Loading...';
-      btn.className = 'btn-scan';
-      status.textContent = 'Loading face detection models...';
-      ringWrap.classList.remove('active');
-      break;
-    case State.READY:
-      btn.disabled = false;
-      btn.textContent = 'Start Scan';
-      btn.className = 'btn-scan';
-      status.textContent = `Ready for ${settings.scanDuration}-second neural scan`;
-      ringWrap.classList.remove('active');
-      break;
-    case State.SCANNING:
-      btn.disabled = false;
-      btn.textContent = 'Stop';
-      btn.className = 'btn-scan stop';
-      status.textContent = 'Scanning... Hold still and look at the camera';
-      ringWrap.classList.add('active');
-      break;
-    case State.ANALYZING:
-      btn.disabled = true;
-      btn.textContent = 'Analyzing...';
-      btn.className = 'btn-scan';
-      status.textContent = 'Processing scan data...';
-      ringWrap.classList.remove('active');
-      break;
-    case State.RESULTS:
-      btn.disabled = false;
-      btn.textContent = 'New Scan';
-      btn.className = 'btn-scan';
-      status.textContent = 'Scan complete. View your results.';
-      ringWrap.classList.remove('active');
-      break;
-  }
+  startCamera().then(ok => {
+    if (!ok) return;
+    monitorInterval = setInterval(async () => {
+      const video = document.getElementById('cameraVideo');
+      if (!video || video.readyState < 2) return;
+
+      try {
+        const dets = await faceapi
+          .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.4 }))
+          .withFaceLandmarks()
+          .withFaceExpressions();
+
+        if (dets.length > 0) {
+          threatEngine.processFrame('user', dets[0]);
+          deceptionEngine.processFrame('user', dets[0]);
+          const quick = threatEngine.fullAnalysis('user');
+          if (quick && quick.metrics) {
+            updateTherapyBadge(AlphaEye.getDominantState(quick.metrics));
+          }
+        }
+      } catch (e) {}
+    }, 200);
+  });
 }
 
-function updateScanTimer(remainingMs, totalMs) {
-  const seconds = Math.ceil(remainingMs / 1000);
-  document.getElementById('scanTimerValue').textContent = seconds;
+function stopMonitoring() {
+  if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
+  stopCamera();
+}
 
-  const progress = 1 - (remainingMs / totalMs);
-  const circumference = 2 * Math.PI * 45; // r=45
-  const offset = circumference * (1 - progress);
-  document.getElementById('scanRingProgress').style.strokeDashoffset = offset;
+function updateTherapyBadge(state) {
+  const badge = document.getElementById('therapyBadge');
+  const dot = document.getElementById('badgeDot');
+  const text = document.getElementById('badgeText');
+  if (!badge) return;
+  const dir = therapyEngine.getDirection(state);
+  badge.style.display = 'flex';
+  dot.style.background = dir.color;
+  text.textContent = dir.label;
 }
 
 // ============================================
@@ -517,8 +494,7 @@ function updateScanTimer(remainingMs, totalMs) {
 // ============================================
 function showResults() {
   if (!lastProfile) return;
-  const container = document.getElementById('resultsContent');
-  Charts.renderAllResults(lastProfile, container);
+  Charts.renderAllResults(lastProfile, document.getElementById('resultsContent'));
 }
 
 // ============================================
@@ -529,12 +505,10 @@ function initChat() {
   const sendBtn = document.getElementById('btnSend');
   const micBtn = document.getElementById('btnMic');
 
-  // Enable send when there's text
   input.addEventListener('input', () => {
     sendBtn.disabled = !input.value.trim();
   });
 
-  // Send on enter
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey && input.value.trim()) {
       e.preventDefault();
@@ -542,10 +516,7 @@ function initChat() {
     }
   });
 
-  // Send button
   sendBtn.addEventListener('click', sendMessage);
-
-  // Mic button (speech recognition)
   micBtn.addEventListener('click', toggleSpeechRecognition);
 }
 
@@ -557,11 +528,19 @@ async function sendMessage() {
   input.value = '';
   document.getElementById('btnSend').disabled = true;
 
-  // Add user message
   chatMessages.push({ role: 'user', content: text });
   appendChatBubble('user', text);
 
-  // Check Ollama connection
+  // Check for scan trigger keywords
+  const lower = text.toLowerCase();
+  if (lower.includes('scan me') || lower.includes('read me') || lower.includes('analyze me')) {
+    appendChatBubble('assistant', "Of course! Let me take another look at you...");
+    avatarSpeak("Let me read you...");
+    setTimeout(() => triggerScan(), 1500);
+    return;
+  }
+
+  // Check Ollama
   if (!ollamaClient.connected) {
     const ok = await ollamaClient.testConnection();
     if (!ok) {
@@ -570,34 +549,28 @@ async function sendMessage() {
     }
   }
 
-  // Build system prompt with scan data
+  // System prompt
   let systemPrompt = 'You are MicroSense, a warm and caring AI companion. Keep responses brief (2-3 sentences).';
   if (lastProfile) {
     systemPrompt = therapyEngine.buildSystemPrompt(lastProfile);
   }
 
-  // Show typing indicator
+  // Typing indicator
   const typingEl = appendTypingIndicator();
 
   try {
     let fullResponse = '';
     for await (const token of ollamaClient.chat(chatMessages, systemPrompt)) {
       fullResponse += token;
-      // Update typing indicator with streamed text
-      if (typingEl) {
-        typingEl.innerHTML = fullResponse;
-      }
+      if (typingEl) typingEl.innerHTML = fullResponse;
     }
 
-    // Remove typing, add final bubble
     if (typingEl) typingEl.remove();
     chatMessages.push({ role: 'assistant', content: fullResponse });
     appendChatBubble('assistant', fullResponse);
 
-    // TTS
-    if (settings.ttsEnabled && fullResponse) {
-      speak(fullResponse);
-    }
+    // Avatar speaks the response
+    if (fullResponse) avatarSpeak(fullResponse);
 
   } catch (err) {
     if (typingEl) typingEl.remove();
@@ -611,11 +584,20 @@ async function sendMessage() {
 function appendChatBubble(role, text) {
   const container = document.getElementById('chatMessages');
   const bubble = document.createElement('div');
-  bubble.className = `chat-bubble ${role}`;
+  bubble.className = 'chat-bubble ' + role;
   bubble.textContent = text;
   container.appendChild(bubble);
   container.scrollTop = container.scrollHeight;
   return bubble;
+}
+
+function appendSystemMessage(text) {
+  const container = document.getElementById('chatMessages');
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble system';
+  bubble.textContent = text;
+  container.appendChild(bubble);
+  container.scrollTop = container.scrollHeight;
 }
 
 function appendTypingIndicator() {
@@ -636,24 +618,17 @@ let recognition = null;
 let isListening = false;
 
 function toggleSpeechRecognition() {
-  if (isListening) {
-    stopListening();
-    return;
-  }
+  if (isListening) { stopListening(); return; }
 
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    showToast('Speech recognition not supported', 'error');
-    return;
-  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast('Speech recognition not supported', 'error'); return; }
 
-  recognition = new SpeechRecognition();
+  recognition = new SR();
   recognition.lang = settings.language === 'ja' ? 'ja-JP' : settings.language === 'zh' ? 'zh-CN' : 'en-US';
   recognition.interimResults = true;
   recognition.continuous = false;
 
-  const micBtn = document.getElementById('btnMic');
-  micBtn.classList.add('recording');
+  document.getElementById('btnMic').classList.add('recording');
   isListening = true;
 
   recognition.onresult = (e) => {
@@ -664,50 +639,21 @@ function toggleSpeechRecognition() {
 
   recognition.onend = () => {
     stopListening();
-    // Auto-send if we have text
-    const input = document.getElementById('chatInput');
-    if (input.value.trim()) {
-      sendMessage();
-    }
+    if (document.getElementById('chatInput').value.trim()) sendMessage();
   };
 
-  recognition.onerror = () => {
-    stopListening();
-  };
-
+  recognition.onerror = () => stopListening();
   recognition.start();
 }
 
 function stopListening() {
   isListening = false;
   document.getElementById('btnMic').classList.remove('recording');
-  if (recognition) {
-    try { recognition.stop(); } catch (e) {}
-    recognition = null;
-  }
+  if (recognition) { try { recognition.stop(); } catch (e) {} recognition = null; }
 }
 
 // ============================================
-// TTS (Text-to-Speech)
-// ============================================
-function speak(text) {
-  if (!window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = settings.ttsSpeed;
-  utterance.pitch = 1.0;
-
-  // Try to match language
-  if (settings.language === 'ja') utterance.lang = 'ja-JP';
-  else if (settings.language === 'zh') utterance.lang = 'zh-CN';
-  else utterance.lang = 'en-US';
-
-  window.speechSynthesis.speak(utterance);
-}
-
-// ============================================
-// OLLAMA CONNECTION CHECK
+// OLLAMA CONNECTION
 // ============================================
 async function checkOllamaConnection() {
   const dot = document.getElementById('ollamaStatus');
@@ -717,78 +663,75 @@ async function checkOllamaConnection() {
 }
 
 // ============================================
-// BACKGROUND FACE MONITORING (Chat tab)
+// GENDER TOGGLE
 // ============================================
-function startChatMonitoring() {
-  if (chatMonitorInterval) return;
-
-  startCamera().then(ok => {
-    if (!ok) return;
-
-    chatMonitorInterval = setInterval(async () => {
-      const video = document.getElementById('cameraVideo');
-      if (!video || video.readyState < 2) return;
-
-      try {
-        const dets = await faceapi
-          .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.4 }))
-          .withFaceLandmarks()
-          .withFaceExpressions();
-
-        if (dets.length > 0) {
-          threatEngine.processFrame('user', dets[0]);
-          deceptionEngine.processFrame('user', dets[0]);
-
-          // Update therapy badge
-          const quickResult = threatEngine.fullAnalysis('user');
-          if (quickResult && quickResult.metrics) {
-            const state = AlphaEye.getDominantState(quickResult.metrics);
-            updateTherapyBadge(state);
-          }
-        }
-      } catch (e) {}
-    }, 200); // 5fps
+function initGenderToggle() {
+  document.querySelectorAll('.gender-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      settings.avatarGender = btn.dataset.gender;
+      saveSettings();
+      avatarEngine.setGender(settings.avatarGender);
+    });
   });
 }
 
-function stopChatMonitoring() {
-  if (chatMonitorInterval) {
-    clearInterval(chatMonitorInterval);
-    chatMonitorInterval = null;
-  }
-  stopCamera();
-}
+// ============================================
+// NAVIGATION
+// ============================================
+function initNav() {
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const tab = item.dataset.tab;
+      if (!tab) return;
 
-function updateTherapyBadge(state) {
-  const badge = document.getElementById('therapyBadge');
-  const dot = document.getElementById('badgeDot');
-  const text = document.getElementById('badgeText');
-  if (!badge) return;
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      item.classList.add('active');
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      const panel = document.getElementById(tab);
+      if (panel) panel.classList.add('active');
 
-  const dir = therapyEngine.getDirection(state);
-  badge.style.display = 'flex';
-  dot.style.background = dir.color;
-  text.textContent = dir.label;
+      if (tab === 'panelSettings') renderSettings();
+      if (tab === 'panelResults' && lastProfile) showResults();
+
+      // Monitoring only on home tab with profile
+      if (tab === 'panelHome' && lastProfile) {
+        startMonitoring();
+      } else if (tab !== 'panelHome') {
+        stopMonitoring();
+      }
+
+      if (tab !== 'panelHome') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+  });
 }
 
 // ============================================
-// SETTINGS TAB
+// SETTINGS
 // ============================================
 function renderSettings() {
   const content = document.getElementById('settingsContent');
   if (!content) return;
 
   content.innerHTML = `
-    <!-- Appearance -->
     <div class="settings-group">
       <div class="settings-group-title">Appearance</div>
       <div class="setting-item">
         <div class="setting-left"><div class="setting-icon" style="background:var(--accent-purple)">&#127769;</div><span class="setting-label">Dark Mode</span></div>
         <button class="setting-toggle ${settings.theme==='dark'?'on':''}" data-setting="theme"></button>
       </div>
+      <div class="setting-item">
+        <div class="setting-left"><div class="setting-icon" style="background:var(--accent-pink)">&#128100;</div><span class="setting-label">Avatar</span></div>
+        <div class="duration-selector">
+          <button class="duration-btn ${settings.avatarGender==='female'?'active':''}" data-avatar="female">Female</button>
+          <button class="duration-btn ${settings.avatarGender==='male'?'active':''}" data-avatar="male">Male</button>
+        </div>
+      </div>
     </div>
 
-    <!-- Scan -->
     <div class="settings-group">
       <div class="settings-group-title">Scan</div>
       <div class="setting-item">
@@ -801,7 +744,6 @@ function renderSettings() {
       </div>
     </div>
 
-    <!-- Ollama -->
     <div class="settings-group">
       <div class="settings-group-title">Ollama AI</div>
       <div class="setting-item">
@@ -815,12 +757,11 @@ function renderSettings() {
         </select>
       </div>
       <div class="setting-item">
-        <div class="setting-left"><div class="setting-icon" style="background:var(--accent-orange)">&#128268;</div><span class="setting-label">Test Connection</span></div>
+        <div class="setting-left"><div class="setting-icon" style="background:var(--accent-orange)">&#128268;</div><span class="setting-label">Connection</span></div>
         <button class="btn-test" id="btnTestOllama">Test</button>
       </div>
     </div>
 
-    <!-- Voice -->
     <div class="settings-group">
       <div class="settings-group-title">Voice</div>
       <div class="setting-item">
@@ -837,14 +778,12 @@ function renderSettings() {
       </div>
     </div>
 
-    <!-- Scan History -->
     <div class="settings-group">
       <div class="settings-group-title">Scan History (${scanHistory.length})</div>
       <div id="historyList"></div>
       ${scanHistory.length === 0 ? '<div class="setting-item"><span class="setting-label" style="color:var(--text-muted)">No scans yet</span></div>' : ''}
     </div>
 
-    <!-- About -->
     <div class="settings-group">
       <div class="settings-group-title">About</div>
       <div class="setting-item"><div class="setting-left"><div class="setting-icon" style="background:var(--text-muted)">&#9881;</div><span class="setting-label">Version</span></div><span class="setting-value">3.0.0</span></div>
@@ -852,7 +791,7 @@ function renderSettings() {
     </div>
   `;
 
-  // Render history
+  // History
   const historyList = document.getElementById('historyList');
   if (historyList && scanHistory.length > 0) {
     historyList.innerHTML = scanHistory.map((scan, i) => {
@@ -872,13 +811,17 @@ function renderSettings() {
   }
 
   // Wire events
+  wireSettingsEvents(content);
+}
+
+function wireSettingsEvents(content) {
+  // Toggles
   content.querySelectorAll('.setting-toggle').forEach(btn => {
     btn.addEventListener('click', function() {
       this.classList.toggle('on');
       const key = this.dataset.setting;
-      if (key === 'theme') {
-        toggleTheme();
-      } else if (key === 'tts') {
+      if (key === 'theme') toggleTheme();
+      else if (key === 'tts') {
         settings.ttsEnabled = this.classList.contains('on');
         saveSettings();
         showToast(settings.ttsEnabled ? 'TTS enabled' : 'TTS disabled', 'info');
@@ -886,18 +829,33 @@ function renderSettings() {
     });
   });
 
-  // Duration selector
+  // Avatar gender
+  content.querySelectorAll('[data-avatar]').forEach(btn => {
+    btn.addEventListener('click', function() {
+      content.querySelectorAll('[data-avatar]').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      settings.avatarGender = this.dataset.avatar;
+      saveSettings();
+      avatarEngine.setGender(settings.avatarGender);
+      // Sync home page toggle
+      document.querySelectorAll('.gender-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.gender === settings.avatarGender);
+      });
+    });
+  });
+
+  // Duration
   content.querySelectorAll('[data-dur]').forEach(btn => {
     btn.addEventListener('click', function() {
       content.querySelectorAll('[data-dur]').forEach(b => b.classList.remove('active'));
       this.classList.add('active');
       settings.scanDuration = parseInt(this.dataset.dur);
       saveSettings();
-      showToast(`Scan duration: ${settings.scanDuration}s`, 'info');
+      showToast('Scan duration: ' + settings.scanDuration + 's', 'info');
     });
   });
 
-  // Speed selector
+  // Speed
   content.querySelectorAll('[data-speed]').forEach(btn => {
     btn.addEventListener('click', function() {
       content.querySelectorAll('[data-speed]').forEach(b => b.classList.remove('active'));
@@ -930,7 +888,6 @@ function renderSettings() {
       if (ok) {
         showToast('Ollama connected!', 'success');
         checkOllamaConnection();
-        // Refresh models
         const models = await ollamaClient.listModels();
         const select = document.getElementById('ollamaModelSelect');
         if (select && models.length > 0) {
@@ -962,6 +919,7 @@ function renderSettings() {
         settings = { ...DEFAULTS };
         scanHistory = [];
         setTheme(settings.theme);
+        avatarEngine.setGender(settings.avatarGender);
         renderSettings();
         showToast('All data reset', 'info');
       }
@@ -974,12 +932,11 @@ function renderSettings() {
       const idx = parseInt(item.dataset.idx);
       const scan = scanHistory[idx];
       if (scan) {
-        // Reconstruct a minimal profile for display
         lastProfile = {
           params: scan.params,
           stateOfMind: scan.stateOfMind,
-          vitalityIndex: 0,
-          concentrationIndex: 50,
+          vitalityIndex: AlphaEye.computeVitality(scan.params.energy, scan.params.stress, scan.params.neuroticism),
+          concentrationIndex: AlphaEye.computeConcentration(100 - scan.params.inhibition, scan.params.inhibition, scan.params.stress),
           emotionalVariation: AlphaEye.computeEmotionalVariation(scan.params),
           voiceStress: 0,
           deceptionProb: 0,
@@ -987,52 +944,10 @@ function renderSettings() {
           deceptionTimeline: [],
           timestamp: scan.timestamp
         };
-        lastProfile.vitalityIndex = AlphaEye.computeVitality(scan.params.energy, scan.params.stress, scan.params.neuroticism);
-        lastProfile.concentrationIndex = AlphaEye.computeConcentration(100 - scan.params.inhibition, scan.params.inhibition, scan.params.stress);
         showResults();
         document.querySelector('[data-tab="panelResults"]')?.click();
       }
     });
-  });
-}
-
-// ============================================
-// NAVIGATION
-// ============================================
-function initNav() {
-  document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const tab = item.dataset.tab;
-      if (!tab) return;
-
-      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-      item.classList.add('active');
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-      const panel = document.getElementById(tab);
-      if (panel) panel.classList.add('active');
-
-      // Tab-specific actions
-      if (tab === 'panelSettings') renderSettings();
-      if (tab === 'panelResults' && lastProfile) showResults();
-
-      // Start/stop chat monitoring
-      if (tab === 'panelChat' && lastProfile) {
-        startChatMonitoring();
-      } else {
-        stopChatMonitoring();
-      }
-
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-  });
-
-  // Scan button
-  document.getElementById('btnScan').addEventListener('click', () => {
-    if (appState === State.SCANNING) {
-      stopScan();
-    } else {
-      startScan();
-    }
   });
 }
 
